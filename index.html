@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>Tidewater — Redemption-Bounded Market Making over Shared Liquidity</title>
+<meta name="description" content="A pricing and risk framework for redeemable-reference assets, built on 1inch Aqua and SwapVM. Quotes are bounded by what an asset actually redeems for, at the size requested, adjusted for settlement delay.">
+
+
+<link rel="canonical" href="https://CaptainLEVI-XXX.github.io/tidewater/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Tidewater">
+<meta property="og:url" content="https://CaptainLEVI-XXX.github.io/tidewater/">
+<meta property="og:title" content="Tidewater — Redemption-Bounded Market Making">
+<meta property="og:description" content="Pricing redeemable assets against what they actually redeem for, not pool inventory. Built on 1inch Aqua and SwapVM.">
+<meta property="og:image" content="https://CaptainLEVI-XXX.github.io/tidewater/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:creator" content="@0x0saurabh">
+<meta name="twitter:image" content="https://CaptainLEVI-XXX.github.io/tidewater/og.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --ground:#F4F8F8;
+  --band:#E1EEEE;
+  --teal:#0F5A63;
+  --sea:#7FB3B8;
+  --sand:#B08D4E;
+  --rust:#B4552B;
+  --ink:#11282A;
+  --muted:#4E6768;
+  --rule:#C8DCDC;
+  --measure:34rem;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;
+  background:var(--ground);
+  color:var(--ink);
+  font:400 1.0625rem/1.65 "IBM Plex Sans",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:60rem;margin:0 auto;padding:0 1.5rem}
+
+/* ---------- eyebrow / labels ---------- */
+.eyebrow{
+  font:500 .75rem/1 "IBM Plex Mono",monospace;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+}
+
+/* ---------- hero ---------- */
+header{padding:5rem 0 0}
+h1{
+  font:600 clamp(2.1rem,5.4vw,3.4rem)/1.08 "Spectral",Georgia,serif;
+  margin:1.5rem 0 0;max-width:22ch;letter-spacing:-.015em;
+}
+h1 em{font-style:normal;color:var(--teal)}
+.lede{
+  font:400 clamp(1.05rem,1.9vw,1.3rem)/1.6 "Spectral",Georgia,serif;
+  color:var(--muted);max-width:var(--measure);margin:1.5rem 0 0;
+}
+.byline{
+  font:400 .875rem/1 "IBM Plex Mono",monospace;
+  color:var(--muted);margin:2rem 0 0;
+}
+.byline a{color:var(--teal)}
+
+/* ---------- actions ---------- */
+.actions{display:flex;flex-wrap:wrap;gap:.75rem;margin:2.25rem 0 0}
+.btn{
+  display:inline-flex;align-items:center;gap:.6rem;
+  padding:.8rem 1.4rem;border-radius:2px;text-decoration:none;
+  font:500 .9375rem/1 "IBM Plex Sans",sans-serif;
+  transition:background .15s ease,color .15s ease,border-color .15s ease;
+}
+.btn-primary{background:var(--teal);color:var(--ground);border:1px solid var(--teal)}
+.btn-primary:hover{background:#0B454C;border-color:#0B454C}
+.btn-ghost{background:transparent;color:var(--teal);border:1px solid var(--rule)}
+.btn-ghost:hover{border-color:var(--teal);background:var(--band)}
+.btn .meta{font-family:"IBM Plex Mono",monospace;font-size:.75rem;opacity:.72}
+a:focus-visible,.btn:focus-visible{outline:2px solid var(--rust);outline-offset:3px}
+
+/* ---------- figure ---------- */
+.figure{margin:4.5rem 0 0}
+.figure svg{display:block;width:100%;height:auto}
+figcaption{
+  font:400 .875rem/1.6 "IBM Plex Sans",sans-serif;
+  color:var(--muted);max-width:var(--measure);margin:1.1rem 0 0;
+}
+.svg-label{font:400 11px "IBM Plex Mono",monospace}
+.svg-note{font:400 10.5px "IBM Plex Sans",sans-serif;font-style:italic}
+
+/* clamp animation */
+.clamp-dot{transform:translateY(0)}
+@media (prefers-reduced-motion:no-preference){
+  .clamp-dot{animation:drop 2.6s cubic-bezier(.5,0,.2,1) .9s both}
+  .clamp-arrow{animation:fade 2.6s ease .9s both}
+  @keyframes drop{0%{transform:translateY(0)}55%,100%{transform:translateY(79px)}}
+  @keyframes fade{0%,10%{opacity:0}45%,100%{opacity:1}}
+}
+
+/* ---------- sections ---------- */
+section{padding:4.5rem 0 0}
+h2{
+  font:600 1.375rem/1.25 "Spectral",Georgia,serif;
+  margin:.9rem 0 0;letter-spacing:-.01em;
+}
+.rule{height:1px;background:var(--rule);border:0;margin:0}
+.grid{display:grid;gap:2rem;margin:2.25rem 0 0}
+@media(min-width:46rem){.grid{grid-template-columns:repeat(3,1fr);gap:2.5rem}}
+.item h3{
+  font:500 .75rem/1 "IBM Plex Mono",monospace;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--teal);margin:0 0 .7rem;
+}
+.item p{margin:0;color:var(--muted);font-size:.9375rem;line-height:1.62}
+.item code{
+  font:400 .875em "IBM Plex Mono",monospace;
+  background:var(--band);padding:.1em .35em;border-radius:2px;color:var(--ink);
+}
+
+/* ---------- limits ---------- */
+.limits{border-left:2px solid var(--rust);padding:0 0 0 1.5rem;margin:2.25rem 0 0;max-width:var(--measure)}
+.limits p{margin:0 0 .9rem;color:var(--muted);font-size:.9375rem}
+.limits p:last-child{margin-bottom:0}
+
+/* ---------- footer ---------- */
+footer{margin:6rem 0 0;padding:2rem 0 4rem;border-top:1px solid var(--rule)}
+.footrow{display:flex;flex-wrap:wrap;gap:1.5rem;justify-content:space-between;align-items:baseline}
+footer a{color:var(--teal)}
+.stamp{font:400 .8125rem/1 "IBM Plex Mono",monospace;color:var(--muted)}
+</style>
+</head>
+
+<body>
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">Whitepaper &nbsp;·&nbsp; July 2026</p>
+    <h1>Redemption-Bounded Market Making <em>over Shared Liquidity</em></h1>
+    <p class="lede">
+      Vault shares, liquid-staking tokens and yield-bearing dollars already tell you what
+      they convert into. Tidewater quotes against that boundary instead of pool inventory —
+      at the size actually requested, and adjusted for how long settlement really takes.
+      It runs as a SwapVM program and settles through 1inch Aqua.
+    </p>
+
+    <div class="actions">
+      <a class="btn btn-primary" href="tidewater-whitepaper.pdf">
+        Read the whitepaper <span class="meta">PDF · 8pp</span>
+      </a>
+      <a class="btn btn-ghost" href="https://x.com/0x0saurabh">Follow the build</a>
+    </div>
+
+    <p class="byline">Saurabh Yadav · <a href="mailto:saurabhyadav42399@gmail.com">saurabhyadav42399@gmail.com</a></p>
+  </header>
+
+  <!-- ============ signature: the corridor ============ -->
+  <figure class="figure">
+    <svg viewBox="0 0 720 300" role="img"
+         aria-label="A price axis showing an admissible ask band above a replacement-cost floor, an admissible bid band below a delay-adjusted ceiling, and a no-quote corridor between them.">
+      <rect x="86" y="18"  width="560" height="66"  fill="var(--band)"/>
+      <rect x="86" y="196" width="560" height="86"  fill="var(--band)"/>
+
+      <line x1="86" y1="10" x2="86" y2="290" stroke="var(--ink)" stroke-width="1.5"/>
+
+      <!-- ask side -->
+      <line x1="86" y1="84" x2="646" y2="84" stroke="var(--teal)" stroke-width="3"/>
+      <text class="svg-label" x="96" y="102" fill="var(--teal)">B_m · replacement cost — ask floor</text>
+      <line x1="86" y1="46" x2="520" y2="46" stroke="var(--sand)" stroke-width="2" stroke-dasharray="6 4"/>
+      <text class="svg-label" x="528" y="50" fill="var(--sand)">model ask</text>
+      <text class="svg-note" x="96" y="36" fill="var(--teal)">admissible asks</text>
+
+      <!-- no-quote corridor -->
+      <text class="svg-note" x="96" y="145" fill="#8AA3A4">no-quote corridor</text>
+
+      <!-- bid side -->
+      <line x1="86" y1="172" x2="520" y2="172" stroke="#9DB2B2" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <text class="svg-label" x="528" y="176" fill="#7C9394">B_r nominal</text>
+
+      <line x1="86" y1="196" x2="646" y2="196" stroke="var(--teal)" stroke-width="3"/>
+      <text class="svg-label" x="96" y="190" fill="var(--teal)">bid ceiling = B_r eff + β</text>
+
+      <line x1="86" y1="216" x2="500" y2="216" stroke="var(--rust)" stroke-width="2"/>
+      <text class="svg-label" x="508" y="220" fill="var(--rust)">B_r eff</text>
+      <text class="svg-note" x="96" y="268" fill="var(--teal)">admissible bids</text>
+
+      <!-- delta bracket -->
+      <line x1="150" y1="172" x2="150" y2="216" stroke="var(--rust)" stroke-width="1.5"/>
+      <line x1="145" y1="172" x2="155" y2="172" stroke="var(--rust)" stroke-width="1.5"/>
+      <line x1="145" y1="216" x2="155" y2="216" stroke="var(--rust)" stroke-width="1.5"/>
+      <text class="svg-label" x="160" y="198" fill="var(--rust)">δ  carry + hazard</text>
+
+      <!-- the clamp -->
+      <g class="clamp-arrow">
+        <line x1="380" y1="126" x2="380" y2="188" stroke="var(--sand)" stroke-width="2"/>
+        <path d="M373 186 L387 186 L380 196 Z" fill="var(--sand)"/>
+      </g>
+      <circle class="clamp-dot" cx="380" cy="117" r="5.5" fill="var(--sand)"/>
+      <text class="svg-label" x="392" y="114" fill="var(--sand)">model bid</text>
+      <circle cx="380" cy="196" r="5.5" fill="var(--teal)"/>
+    </svg>
+    <figcaption>
+      The inventory model chooses how competitive to be inside the shaded regions. The conversion
+      bounds set the edges. An aggressive model bid is clamped down to the ceiling, never up — and
+      where the delay haircut δ exceeds the basis budget β, that ceiling sits below the headline
+      redemption rate on purpose.
+    </figcaption>
+  </figure>
+
+  <!-- ============ what it does ============ -->
+  <section>
+    <hr class="rule">
+    <p class="eyebrow" style="margin-top:1.5rem">The mechanism</p>
+    <h2>Three rules, and a refusal to guess</h2>
+
+    <div class="grid">
+      <div class="item">
+        <h3>Bounds, not rates</h3>
+        <p>
+          An adapter returns the least you would get redeeming <code>Q</code> units, the most it
+          would cost to replace them, and the capacity both numbers survive.
+          <code>convertToAssets()</code> is an estimate, not a promise, and is never used as a bound.
+        </p>
+      </div>
+      <div class="item">
+        <h3>Delay is priced</h3>
+        <p>
+          A queued exit commits capital for days. Quoting the nominal bound anyway means financing
+          someone else's withdrawal queue for free, so the bound takes an explicit carry and hazard
+          haircut before it becomes a ceiling.
+        </p>
+      </div>
+      <div class="item">
+        <h3>Fail closed</h3>
+        <p>
+          Stale state, a missing permission, an unbounded settlement time, capacity exhausted between
+          quote and fill — any of them produces no quote rather than an optimistic one. Uncertainty
+          reverts.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ limits ============ -->
+  <section>
+    <hr class="rule">
+    <p class="eyebrow" style="margin-top:1.5rem">Scope</p>
+    <h2>What the guarantee does not cover</h2>
+
+    <div class="limits">
+      <p>
+        The result is narrow on purpose. Within a valid conversion path, its declared capacity and
+        its declared settlement delay, carry-adjusted loss relative to redemption is bounded by a
+        budget you set explicitly.
+      </p>
+      <p>
+        Outside those assumptions it covers nothing. Not issuer default, not a depeg of the reference
+        asset itself, not governance seizure, not a withdrawal queue that runs longer than the adapter
+        claimed. That last one is the exposure the corridor genuinely cannot bound, and the paper says
+        so rather than pricing it away.
+      </p>
+      <p>
+        This is design work. Nothing is deployed.
+      </p>
+    </div>
+  </section>
+
+  <footer>
+    <div class="footrow">
+      <span class="stamp">Tidewater · whitepaper · July 2026</span>
+      <span class="stamp">
+        <a href="tidewater-whitepaper.pdf">PDF</a> ·
+        <a href="https://x.com/0x0saurabh">@0x0saurabh</a>
+      </span>
+    </div>
+  </footer>
+
+</div>
+</body>
+</html>
